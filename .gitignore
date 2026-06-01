@@ -1,0 +1,17 @@
+# Secrets - NOOIT committen
+config.py
+*.env
+.env
+secrets.*
+
+# Tijdelijke QA-checkscripts
+_tmp_odoo_check/
+
+# Python
+__pycache__/
+*.pyc
+
+# OS / Windows
+Thumbs.db
+desktop.ini
+*.lnk

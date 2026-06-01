@@ -1,2 +1,56 @@
 # eeg-ticket-triage
-Lokale Claude Code-agent die Xurrent-tickets met overschreden streeftijd diagnosticeert (QA + code + ticket-historiek) en een interne notitie plaatst. Blauwdruk voor latere ACA-Job.
+
+Een lokale [Claude Code](https://claude.com/claude-code)-agent die **Xurrent-tickets met een overschreden streeftijd** automatisch onderzoekt: hij reconstrueert het probleem op de Odoo **QA**-database, analyseert de lokale `eeg-main` broncode, raadpleegt de historiek van afgesloten tickets, en plaatst een **interne notitie** met de diagnose.
+
+> **Status:** lokale testversie. Draait op een werkstation *binnen* het EEG-netwerk (QA + lokale code + MCP's vereist). De architectuur is opgezet als blauwdruk voor een latere onbemande **Azure Container Apps Job** - zie [`docs/architecture.md`](docs/architecture.md).
+
+## Wat het doet
+
+1. **Scan** - Xurrent: tickets met status `assigned`/`waiting_for` en "Volgende target" < vandaag.
+2. **Idempotentie-gate** - tickets met een `[AI-TRIAGE`-marker worden overgeslagen (1x checken).
+3. **Historiek-lookup** - zoekt gelijkaardige, reeds opgeloste tickets in de context-MCP (`tickets/by-id/*`).
+4. **Classificatie** - `incident` (reproduceerbaar) / `datakwestie` / `documentatie`.
+5. **Diagnose** - reproduceert op QA (XML-RPC, read-only) + analyseert `eeg-main/custom`.
+6. **Notitie** - plaatst een interne notitie met marker, classificatie, geverifieerde feiten, historiek-verwijzing en advies. **Nooit code/data-wijzigingen.**
+
+## Gebruik (lokaal)
+
+Dubbelklik de bureaublad-snelkoppeling, of in een terminal:
+
+```cmd
+claude "/ticket-triage mij"
+```
+
+Scope-argument: `mij` | `team` | `<naam>` | `#<ticket-id>`.
+
+De snelkoppeling (`scripts/start-triage.cmd`) start Claude Code interactief, zodat je elke stap ziet en QA-acties/notities kunt goedkeuren.
+
+## Vereisten
+
+- Claude Code CLI, ingelogd
+- Uitvoering *binnen* het EEG-netwerk (QA `odoo-qa.eeg.be` bereikbaar)
+- Lokale MCP-servers `xurrent` + `context` (Docker Desktop)
+- Lokale checkout van `eeg-main` (custom Odoo-modules)
+- QA-credentials via een lokale `config.py` - **niet in deze repo** (zie `scripts/conn.example.py`)
+
+## Repo-structuur
+
+| Pad | Inhoud |
+|-----|--------|
+| `skills/ticket-triage/SKILL.md` | De skill-definitie (de pijplijn) |
+| `scripts/start-triage.cmd` | Windows-startscript voor de snelkoppeling |
+| `scripts/conn.example.py` | Template QA-connectie (zonder secrets) |
+| `docs/architecture.md` | Concept + fase-2 (ACA-Job) + governance |
+
+## Installatie op een nieuwe machine
+
+1. Plaats `skills/ticket-triage/SKILL.md` in `~/.claude/skills/ticket-triage/`.
+2. Pas in `scripts/start-triage.cmd` de paden aan (claude.exe + werkdirectory).
+3. Maak een lokale `config.py` op basis van `scripts/conn.example.py` met je QA-credentials.
+4. Maak een bureaublad-snelkoppeling naar `start-triage.cmd`.
+
+## Beveiliging
+
+- **Geen secrets in deze repo.** QA-wachtwoord en Azure OpenAI-key horen in een lokale `config.py` / env-vars (zie `.gitignore`).
+- De agent doet **geen** wijzigingen op productie; QA-reproductie is read-only (test-writes enkel op QA, met herstel).
+- Notities zijn **intern** (onzichtbaar voor de aanvrager).
