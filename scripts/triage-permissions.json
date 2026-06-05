@@ -1,0 +1,30 @@
+{
+  "permissions": {
+    "defaultMode": "auto",
+    "allow": [
+      "mcp__xurrent__xurrent_search_requests",
+      "mcp__xurrent__xurrent_get_request",
+      "mcp__xurrent__xurrent_get_request_notes",
+      "mcp__xurrent__xurrent_search_people",
+      "mcp__xurrent__xurrent_list_teams",
+      "mcp__xurrent__xurrent_test_connection",
+      "mcp__xurrent__xurrent_add_note",
+      "mcp__context__list_context_files",
+      "mcp__context__get_context_file",
+      "Read",
+      "Glob",
+      "Grep",
+      "Write",
+      "Bash(python:*)",
+      "Bash(py:*)",
+      "PowerShell(python *)",
+      "PowerShell(py *)"
+    ],
+    "deny": [
+      "mcp__xurrent__xurrent_update_request",
+      "mcp__xurrent__xurrent_create_request",
+      "mcp__xurrent__xurrent_update_project_task",
+      "mcp__xurrent__xurrent_add_watcher"
+    ]
+  }
+}

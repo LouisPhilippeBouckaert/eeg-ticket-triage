@@ -23,7 +23,7 @@ claude "/ticket-triage mij"
 
 Scope-argument: `mij` | `team` | `<naam>` | `#<ticket-id>`.
 
-De snelkoppeling (`scripts/start-triage.cmd`) start Claude Code interactief, zodat je elke stap ziet en QA-acties/notities kunt goedkeuren.
+De snelkoppeling (`scripts/start-triage.cmd`) start Claude Code in **auto-modus** (`--settings scripts/triage-permissions.json`): de agent scant, diagnosticeert en plaatst notities **zelfstandig**, zonder per stap toestemming te vragen. De veiligheidsvangrails blijven actief - zie [Beveiliging](#beveiliging).
 
 ## Vereisten
 
@@ -39,18 +39,20 @@ De snelkoppeling (`scripts/start-triage.cmd`) start Claude Code interactief, zod
 |-----|--------|
 | `skills/ticket-triage/SKILL.md` | De skill-definitie (de pijplijn) |
 | `scripts/start-triage.cmd` | Windows-startscript voor de snelkoppeling |
+| `scripts/triage-permissions.json` | Permissions voor de auto-modus (allow-lijst + deny-vangrails) |
 | `scripts/conn.example.py` | Template QA-connectie (zonder secrets) |
 | `docs/architecture.md` | Concept + fase-2 (ACA-Job) + governance |
 
 ## Installatie op een nieuwe machine
 
 1. Plaats `skills/ticket-triage/SKILL.md` in `~/.claude/skills/ticket-triage/`.
-2. Pas in `scripts/start-triage.cmd` de paden aan (claude.exe + werkdirectory).
+2. Pas in `scripts/start-triage.cmd` de paden aan (claude.exe + werkdirectory). Zorg dat `triage-permissions.json` in **dezelfde map** als het script staat (het wordt relatief geladen via `%~dp0`).
 3. Maak een lokale `config.py` op basis van `scripts/conn.example.py` met je QA-credentials.
 4. Maak een bureaublad-snelkoppeling naar `start-triage.cmd`.
 
 ## Beveiliging
 
 - **Geen secrets in deze repo.** QA-wachtwoord en Azure OpenAI-key horen in een lokale `config.py` / env-vars (zie `.gitignore`).
+- De agent draait in **auto-modus** met een **allow-lijst** (enkel de tools die de triage nodig heeft) en **deny-vangrails**: het wijzigen of aanmaken van tickets is geblokkeerd - de agent mag uitsluitend een **interne notitie** plaatsen. Zie `scripts/triage-permissions.json`.
 - De agent doet **geen** wijzigingen op productie; QA-reproductie is read-only (test-writes enkel op QA, met herstel).
 - Notities zijn **intern** (onzichtbaar voor de aanvrager).
