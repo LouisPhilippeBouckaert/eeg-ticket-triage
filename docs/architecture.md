@@ -1,14 +1,19 @@
 # Architectuur & fasering
 
-## Pijplijn
+## Pijplijn (v2)
 
 ```
-1. SCAN (Xurrent)        tickets assigned/waiting_for + volgende target < vandaag
-2. IDEMPOTENTIE-GATE     skip tickets met [AI-TRIAGE-marker (1x checken)
-3. HISTORIEK-LOOKUP      context-MCP: gelijkaardige opgeloste tickets (tickets/by-id/*)
-4. CLASSIFICEER          incident (reproduceerbaar) | datakwestie | documentatie
-5. DIAGNOSE              QA-reproductie (XML-RPC, read-only) + eeg-main code-analyse
-6. OUTPUT                interne notitie met marker + diagnose + advies
+1. SCAN              alle open tickets binnen de scope (ongeacht status)
+2. STATUSGATE        toegewezen/geaccepteerd -> vol | in behandeling -> licht
+                     wachtend op... / wachtend op klant / afgehandeld / geweigerd -> skip
+3. ACTIVITEITSGATE   eigen notitie laatste -> skip | menselijke reactie nadien
+                     en >4 weken stil -> opnieuw | recent actief -> skip
+                     (Autokwalifier- en eigen notities tellen niet als activiteit)
+4. PRIORITEIT/BUDGET vervallen tickets eerst; max 3 volle QA-diagnoses per run
+5. HISTORIEK-LOOKUP  context-MCP: gelijkaardige opgeloste tickets (tickets/by-id/*)
+6. CLASSIFICEER      incident (reproduceerbaar) -> vol | rfc/rfi/data/doc -> licht
+7. DIAGNOSE          QA-reproductie (XML-RPC, read-only) + eeg-main code-analyse
+8. OUTPUT            interne notitie met handle "AI-ticket-analyse [v2 - datum]"
 ```
 
 ## Fase 1 - lokaal (huidige status)
@@ -56,9 +61,22 @@ CAE `cae-lpn-prod-westeurope-001` (zelfde patroon als `caj-voicenote-scanner-pro
 API's - **Xurrent REST**, **Odoo XML-RPC**, **Anthropic API** - en haalt de ticket-historiek
 uit SharePoint/blob i.p.v. de lokale context-MCP. De diagnose-logica blijft identiek.
 
+**De activiteitsgate maakt de dagelijkse cron veilig:** een ticket zonder nieuwe menselijke
+activiteit produceert nooit een nieuwe notitie, dus de job kan elke werkdag draaien zonder
+ruis op tickets te genereren.
+
 ## Governance
 
-- **Idempotentie:** `[AI-TRIAGE`-marker voorkomt dubbele behandeling.
+- **Handle & idempotentie:** elke notitie begint met `🤖 AI-ticket-analyse [v2 · datum]`
+  (de legacy v1-marker `[AI-TRIAGE` blijft herkend als eigen notitie). Herkenning op
+  substring, zodat encoding-verschillen de idempotentie niet breken.
+- **Her-triage:** maximaal één notitie per ticket, tot er nieuwe menselijke activiteit
+  is gevolgd door >4 weken stilte (= de update-doorlooptijd). Is de eigen notitie de
+  laatste reactie, dan blijft het ticket onaangeroerd - ongeacht hoe oud.
+- **Bot-filter:** notities van de Autokwalifier (handle `🤖 Autokwalifier`) tellen niet
+  als menselijke activiteit en worden bij de diagnose inhoudelijk genegeerd.
+- **Werkbudget:** vervallen tickets altijd eerst; max 3 volle QA-diagnoses per run
+  (lichte analyses tellen niet mee). Wat boven de cap valt, pikt de volgende run op.
 - **Eigen vs collega's tickets:** bij teambrede runs eerst een scope-overzicht + go vragen
   voor er notities op andermans tickets geplaatst worden (review-first).
 - **Geen wijzigingen op productie**; QA-reproductie read-only (test-writes met herstel).

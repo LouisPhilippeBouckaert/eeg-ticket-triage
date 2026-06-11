@@ -1,17 +1,19 @@
 # eeg-ticket-triage
 
-Een lokale [Claude Code](https://claude.com/claude-code)-agent die **Xurrent-tickets met een overschreden streeftijd** automatisch onderzoekt: hij reconstrueert het probleem op de Odoo **QA**-database, analyseert de lokale `eeg-main` broncode, raadpleegt de historiek van afgesloten tickets, en plaatst een **interne notitie** met de diagnose.
+Een lokale [Claude Code](https://claude.com/claude-code)-agent die **alle open Xurrent-tickets** van een medewerker bewaakt — ongeacht status. Status-, activiteits- en categoriegates bepalen per ticket of een (her)analyse zinvol is. De agent reconstrueert het probleem op de Odoo **QA**-database, analyseert de lokale `eeg-main` broncode, raadpleegt de historiek van afgesloten tickets, en plaatst een **interne notitie** met de diagnose. Tickets met een **overschreden streeftijd** krijgen altijd voorrang.
 
-> **Status:** lokale testversie. Draait op een werkstation *binnen* het EEG-netwerk (QA + lokale code + MCP's vereist). De architectuur is opgezet als blauwdruk voor een latere onbemande **Azure Container Apps Job** - zie [`docs/architecture.md`](docs/architecture.md).
+> **Status:** lokale testversie (v2). Draait op een werkstation *binnen* het EEG-netwerk (QA + lokale code + MCP's vereist). De architectuur is opgezet als blauwdruk voor een latere onbemande **Azure Container Apps Job** - zie [`docs/architecture.md`](docs/architecture.md).
 
 ## Wat het doet
 
-1. **Scan** - Xurrent: tickets met status `assigned`/`waiting_for` en "Volgende target" < vandaag.
-2. **Idempotentie-gate** - tickets met een `[AI-TRIAGE`-marker worden overgeslagen (1x checken).
-3. **Historiek-lookup** - zoekt gelijkaardige, reeds opgeloste tickets in de context-MCP (`tickets/by-id/*`).
-4. **Classificatie** - `incident` (reproduceerbaar) / `datakwestie` / `documentatie`.
-5. **Diagnose** - reproduceert op QA (XML-RPC, read-only) + analyseert `eeg-main/custom`.
-6. **Notitie** - plaatst een interne notitie met marker, classificatie, geverifieerde feiten, historiek-verwijzing en advies. **Nooit code/data-wijzigingen.**
+1. **Scan** - Xurrent: alle open tickets binnen de scope, ongeacht status.
+2. **Statusgate** - toegewezen/geaccepteerd → volle triage; in behandeling → lichte triage (alleen historiek-tip, geen QA); wachtend op... / wachtend op klant / afgehandeld / geweigerd → overslaan.
+3. **Activiteitsgate** - is de eigen AI-notitie de laatste reactie → niets doen. Kwam er nadien menselijke reactie én ligt het ticket >4 weken stil (de update-doorlooptijd) → opnieuw meenemen. Recent nog actief → niets doen. Notities van de **Autokwalifier** (`🤖 Autokwalifier`) tellen niet als activiteit.
+4. **Prioritering & budget** - vervallen tickets (volgende target < vandaag) eerst; max **3 volle QA-diagnoses** per run, de rest schuift door naar de volgende run.
+5. **Historiek-lookup** - zoekt gelijkaardige, reeds opgeloste tickets in de context-MCP (`tickets/by-id/*`).
+6. **Classificatie** - bepaalt de diepte: `incident` (reproduceerbaar) → volle QA-diagnose; `rfc`/`rfi`/datakwestie/documentatie → lichte analyse.
+7. **Diagnose** - reproduceert op QA (XML-RPC, read-only) + analyseert `eeg-main/custom`.
+8. **Notitie** - interne notitie met handle `🤖 AI-ticket-analyse [v2 · datum]`, classificatie, geverifieerde feiten, historiek-verwijzing en advies. **Nooit code/data-wijzigingen.**
 
 ## Gebruik (lokaal)
 
@@ -24,6 +26,8 @@ claude "/ticket-triage mij"
 Scope-argument: `mij` | `team` | `<naam>` | `#<ticket-id>`.
 
 De snelkoppeling (`scripts/start-triage.cmd`) start Claude Code in **auto-modus** (`--settings scripts/triage-permissions.json`): de agent scant, diagnosticeert en plaatst notities **zelfstandig**, zonder per stap toestemming te vragen. De veiligheidsvangrails blijven actief - zie [Beveiliging](#beveiliging).
+
+De gates maken de agent **dagelijks herhaalbaar**: een ticket waar niets op gebeurde produceert geen nieuwe notitie; her-analyse gebeurt pas na nieuwe menselijke activiteit gevolgd door 4 weken stilte.
 
 ## Vereisten
 
@@ -55,4 +59,4 @@ De snelkoppeling (`scripts/start-triage.cmd`) start Claude Code in **auto-modus*
 - **Geen secrets in deze repo.** QA-wachtwoord en Azure OpenAI-key horen in een lokale `config.py` / env-vars (zie `.gitignore`).
 - De agent draait in **auto-modus** met een **allow-lijst** (enkel de tools die de triage nodig heeft) en **deny-vangrails**: het wijzigen of aanmaken van tickets is geblokkeerd - de agent mag uitsluitend een **interne notitie** plaatsen. Zie `scripts/triage-permissions.json`.
 - De agent doet **geen** wijzigingen op productie; QA-reproductie is read-only (test-writes enkel op QA, met herstel).
-- Notities zijn **intern** (onzichtbaar voor de aanvrager).
+- Notities zijn **intern** (onzichtbaar voor de aanvrager) en beperkt tot **één per ticket**, tot er opnieuw menselijke activiteit + 4 weken stilte is (activiteitsgate).
