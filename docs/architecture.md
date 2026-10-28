@@ -1,19 +1,20 @@
 # Architectuur & fasering
 
-## Pijplijn (v2)
+## Pijplijn (v3)
 
 ```
 1. SCAN              alle open tickets binnen de scope (ongeacht status)
 2. STATUSGATE        toegewezen/geaccepteerd -> vol | in behandeling -> licht
                      wachtend op... / wachtend op klant / afgehandeld / geweigerd -> skip
-3. ACTIVITEITSGATE   eigen notitie laatste -> skip | menselijke reactie nadien
-                     en >4 weken stil -> opnieuw | recent actief -> skip
-                     (Autokwalifier- en eigen notities tellen niet als activiteit)
+3. NOOIT DUBBEL      eigen AI-notitie op ticket of in behandeld.json -> skip
+                     opnieuw enkel via batch #id of codewoord #AI-herbekijk (LP)
+                     (Autokwalifier-notities tellen niet als activiteit)
 4. PRIORITEIT/BUDGET vervallen tickets eerst; max 3 volle QA-diagnoses per run
 5. HISTORIEK-LOOKUP  context-MCP: gelijkaardige opgeloste tickets (tickets/by-id/*)
 6. CLASSIFICEER      incident (reproduceerbaar) -> vol | rfc/rfi/data/doc -> licht
-7. DIAGNOSE          QA-reproductie (XML-RPC, read-only) + eeg-main code-analyse
-8. OUTPUT            interne notitie met handle "AI-ticket-analyse [v2 - datum]"
+7. DIAGNOSE         bijlagen + QA-reproductie + fix testen op QA + eeg-main code-analyse
+8. OUTPUT            interne notitie "AI-ticket-analyse [v3 - datum]" + register
+                     + dagrapport met open go's + qa-restanten.md
 ```
 
 ## Fase 1 - lokaal (huidige status)
@@ -67,12 +68,12 @@ ruis op tickets te genereren.
 
 ## Governance
 
-- **Handle & idempotentie:** elke notitie begint met `🤖 AI-ticket-analyse [v2 · datum]`
+- **Handle & idempotentie:** elke notitie begint met `🤖 AI-ticket-analyse [v3 · datum]`
   (de legacy v1-marker `[AI-TRIAGE` blijft herkend als eigen notitie). Herkenning op
   substring, zodat encoding-verschillen de idempotentie niet breken.
-- **Her-triage:** maximaal één notitie per ticket, tot er nieuwe menselijke activiteit
-  is gevolgd door >4 weken stilte (= de update-doorlooptijd). Is de eigen notitie de
-  laatste reactie, dan blijft het ticket onaangeroerd - ongeacht hoe oud.
+- **Nooit dubbel:** maximaal één AI-notitie per ticket (check op het ticket én in het
+  lokale register `behandeld.json`). Geen automatische her-triage; opnieuw enkel op
+  expliciete vraag via `/ticket-triage #<id>` of een notitie met `#AI-herbekijk`.
 - **Bot-filter:** notities van de Autokwalifier (handle `🤖 Autokwalifier`) tellen niet
   als menselijke activiteit en worden bij de diagnose inhoudelijk genegeerd.
 - **Werkbudget:** vervallen tickets altijd eerst; max 3 volle QA-diagnoses per run
